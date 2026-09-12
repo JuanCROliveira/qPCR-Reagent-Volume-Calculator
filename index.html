@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Volume de Reagentes para qPCR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Bibliotecas para download (PNG/PDF) -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script> 
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        /* Estilos globais para a calculadora */
+        .card {
+            background-color: #ffffff;
+            max-width: 768px;
+            width: 100%;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            padding: 32px;
+        }
+        input[type="number"], input[type="text"], input[type="date"], select {
+            border: 1px solid #ccc;
+            padding: 8px 12px;
+            border-radius: 6px;
+            width: 100%;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        input[type="number"]:focus, input[type="text"]:focus, input[type="date"]:focus, select:focus {
+            outline: none;
+            border-color: #10b981; /* Emerald-500 */
+            box-shadow: 0 0 0 1px #10b981;
+        }
+        .label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+            display: block;
+        }
+        .result-box {
+            background-color: #ecfdf5; /* Emerald-50 */
+            border: 2px solid #10b981; /* Emerald-500 */
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 24px;
+        }
+        .result-header {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #065f46; /* Emerald-800 */
+            margin-bottom: 12px;
+            border-bottom: 2px dashed #a7f3d0; /* Emerald-200 */
+            padding-bottom: 8px;
+        }
+        .input-group-title {
+            font-weight: 700;
+            color: #065f46;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #d1fae5;
+            padding-bottom: 4px;
+        }
+        .text-xs {
+            font-size: 0.75rem;
+            line-height: 1rem;
+        }
+        /* Estilos do Popup Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; 
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0; 
+            visibility: hidden; 
+            transition: opacity 0.3s ease, visibility 0.3s;
+        }
+        .modal.active {
+            opacity: 1; 
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transform: scale(0.95);
+            transition: transform 0.3s;
+        }
+        .modal.active .modal-content {
+            transform: scale(1);
+        }
+        .info-button {
+            display: inline-block;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            margin-left: 8px;
+            padding: 0;
+        }
+        .info-cell {
+            position: relative;
+            padding-right: 30px; 
+        }
+
+        /* Estilos específicos para o Modal de Nomeação de Poços */
+        #wellNamingModal .modal-content {
+            max-width: 850px; 
+            min-height: 400px;
+        }
+        
+        /* Estilos para a Visualização da Placa nos Resultados (Para PNG/PDF) */
+        .well-plate-grid {
+            display: grid;
+            grid-template-columns: 20px repeat(12, 1fr); 
+            gap: 2px;
+            margin: 10px 0;
+            width: 100%; 
+            overflow-x: auto; 
+            max-width: 800px;
+            border: 1px solid #ddd;
+            padding: 5px;
+            border-radius: 8px;
+            background-color: #f0fdfa; 
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .well-plate-header-cell, .well-plate-row-label, .well-cell-named, .well-cell-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem; 
+            font-weight: 500;
+            padding: 2px 1px;
+            height: 30px; 
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            border-radius: 4px;
+        }
+
+        .well-plate-header-cell {
+            font-weight: 700;
+            color: #4b5563; 
+        }
+
+        .well-plate-row-label {
+            font-weight: 700;
+            color: #4b5563; 
+            justify-content: flex-end;
+            padding-right: 5px;
+        }
+
+        .well-cell-named {
+            background-color: #a7f3d0; 
+            color: #065f46; 
+            border: 1px solid #34d399; 
+            font-weight: 600;
+            cursor: help;
+            transition: background-color 0.15s;
+        }
+        .well-cell-named:hover {
+            background-color: #6ee7b7; 
+        }
+
+        .well-cell-empty {
+            background-color: #f3f4f6; 
+            color: #9ca3af; 
+            border: 1px dashed #e5e7eb;
+            cursor: default;
+        }
+        
+        /* Estilos do Rodapé - CLARO */
+        .footer-light {
+            background-color: #f3f4f6; /* Gray-100 */
+            color: #1f2937; /* Gray-800 */
+        }
+        .footer-light .text-gray-400 {
+            color: #4b5563; /* Gray-600 */
+        }
+        .footer-light .text-teal-400 {
+            color: #065f46; /* Dark Green for contrast */
+        }
+        .footer-light .text-gray-200 {
+            color: #374151; /* Gray-700 */
+        }
+        .footer-light .text-blue-400 {
+            color: #1d4ed8; /* Blue-700 for links (mantido para outros links, mas removido do email) */
+        }
+        .footer-light .border-gray-700 {
+            border-color: #d1d5db; /* Gray-300 for separator */
+        }
+        .logo-shadow {
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Regras de Impressão de fallback (para CTRL+P no navegador) */
+        @media print {
+            body > :not(.card):not(.modal) { /* Oculta tudo exceto card e modais (embora modais devam estar invisíveis) */
+                display: none !important;
+            }
+            
+            .card {
+                box-shadow: none !important;
+                max-width: none !important;
+                width: 100% !important;
+                padding: 0 !important;
+                margin: 0 auto !important;
+            }
+            
+            .card > * {
+                display: none !important;
+            }
+            
+            #results {
+                display: block !important;
+                margin: 0 !important;
+                padding: 20px !important;
+                border: none !important;
+                box-shadow: none !important;
+                background-color: white !important; 
+                
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            .well-cell-named {
+                background-color: #a7f3d0 !important; 
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .info-button {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-gray-100">
+    
+    <!-- CONTEÚDO PRINCIPAL (Calculadora) -->
+    <div class="flex-grow flex justify-center p-4 md:p-8 w-full">
+        <div class="card" id="mainCard">
+            <!-- Título com botão de pop-up para a explicação -->
+            <div class="flex justify-center items-center mb-4">
+                <h1 class="text-3xl font-bold text-gray-800">Dosagem de Reagentes para qPCR</h1>
+                <button onclick="showPedagogicalExplanation()" 
+                        class="ml-3 p-1 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition duration-150" 
+                        title="Entenda o Master Mix">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 text-center mb-6">Calcule o volume total de reagentes, incluindo margem de segurança, para o preparo do seu Master Mix de genotipagem.</p>
+
+            <!-- Seção de Entradas -->
+            <div class="space-y-4">
+                
+                <!-- 0. Metadados do Experimento -->
+                <p class="input-group-title">0. Informações do Experimento</p>
+                <div class="space-y-3">
+                    <!-- Nome do Experimento -->
+                    <div>
+                        <label for="experimentName" class="label">Nome do Experimento:</label>
+                        <input type="text" id="experimentName" value="Genotipagem SNP-X" oninput="calculateVolumes()" class="text-lg">
+                    </div>
+                    <!-- Responsável e Data -->
+                    <div class="flex space-x-4">
+                        <div class="w-2/3">
+                            <label for="responsiblePerson" class="label">Responsável:</label>
+                            <input type="text" id="responsiblePerson" value="Seu Nome" oninput="calculateVolumes()" class="text-lg">
+                        </div>
+                        <div class="w-1/3">
+                            <label for="date" class="label">Data:</label>
+                            <input type="date" id="date" onchange="calculateVolumes()" class="text-lg">
+                        </div>
+                    </div>
+                </div>
+
+                <p class="input-group-title">1. Configuração da Placa (Cálculo de N)</p>
+                <div class="flex space-x-4">
+                    <!-- Nº de Amostras -->
+                    <div class="w-1/3">
+                        <div class="min-h-[6rem] flex flex-col justify-end">
+                            <label for="numSamples" class="label">Nº de Amostras:</label>
+                            <input type="number" id="numSamples" value="40" min="1" oninput="calculateVolumes()" class="text-lg">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Número de amostras biológicas a serem testadas.</p>
+                    </div>
+                    <!-- Replicatas -->
+                    <div class="w-1/3">
+                        <div class="min-h-[6rem] flex flex-col justify-end">
+                            <label for="numReplicates" class="label">Replicatas (por amostra):</label>
+                            <input type="number" id="numReplicates" value="2" min="1" oninput="calculateVolumes()" class="text-lg">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Geralmente 1 (simples), 2 (duplicata) ou 3 (triplicata).</p>
+                    </div>
+                    <!-- Nº de Controles -->
+                    <div class="w-1/3">
+                        <div class="min-h-[6rem] flex flex-col justify-end">
+                            <label for="numControls" class="label">Nº de Controles:</label>
+                            <input type="number" id="numControls" value="8" min="0" oninput="calculateVolumes()" class="text-lg">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Soma de controles (Ex: 4 Negativos e 4 Positivos).</p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center bg-gray-100 p-2 rounded-lg">
+                    <p class="text-sm font-semibold text-gray-700">Total de Poços (N): <span id="numWellsDisplay" class="font-bold text-emerald-600">88</span></p>
+                    <!-- BOTÃO DE MAPEAR POÇOS -->
+                    <button onclick="showWellNamingModal()" 
+                            class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold py-1.5 px-3 rounded-md transition duration-150 ease-in-out shadow-sm">
+                        Mapear Poços (A-H, 1-12)
+                    </button>
+                </div>
+
+                <p class="input-group-title">2. Parâmetros da Reação</p>
+                
+                <!-- Volume Total da Reação (VT) e Margem -->
+                <div class="flex space-x-4">
+                    <!-- Volume Total da Reação (VT) -->
+                    <div class="w-1/2">
+                        <div class="min-h-[6rem] flex flex-col justify-end">
+                            <label for="totalRxnVolume" class="label">Volume Total da Reação (V<sub>T</sub> em &mu;L):</label>
+                            <input type="number" id="totalRxnVolume" value="10.0" min="5.0" step="0.5" oninput="calculateVolumes()" class="text-lg">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Volume final em cada poço (geralmente 10 µL ou 20 µL).</p>
+                    </div>
+                    <!-- Margem de Segurança (M) -->
+                    <div class="w-1/2">
+                        <div class="min-h-[6rem] flex flex-col justify-end">
+                            <label for="margin" class="label">Margem de Segurança (M em %):</label>
+                            <input type="number" id="margin" value="10" min="0" max="50" oninput="calculateVolumes()" class="text-lg">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Porcentagem adicionada ao N total para compensar perdas (ex: 10%).</p>
+                    </div>
+                </div>
+
+                <!-- Concentração do Assay (C) -->
+                <div>
+                    <div class="min-h-[6rem] flex flex-col justify-end">
+                        <label for="assayConcentration" class="label">TaqMan Assay (Concentração de Estoque):</label>
+                        <select id="assayConcentration" onchange="calculateVolumes()" class="text-lg">
+                            <option value="20">20X</option>
+                            <option value="40">40X</option>
+                        </select>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Concentração do estoque do seu Sonda/Primer (Assay).</p>
+                </div>
+
+                <p class="input-group-title">3. Dosagem de DNA (Massa Alvo)</p>
+                
+                <!-- Massa Alvo e Concentração Estoque -->
+                <div class="flex space-x-4">
+                    <!-- Massa Alvo de DNA -->
+                    <div class="w-1/2">
+                        <div class="min-h-[6rem] flex flex-col justify-end">
+                            <label for="targetDNAmass" class="label">Massa Alvo de DNA (ng/poço):</label>
+                            <input type="number" id="targetDNAmass" value="10.0" min="0.1" step="0.1" oninput="calculateVolumes()" class="text-lg">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">A massa de DNA que você deseja em cada poço (ex: 10 ng).</p>
+                    </div>
+                    <!-- Concentração Estoque DNA -->
+                    <div class="w-1/2">
+                        <div class="min-h-[6rem] flex flex-col justify-end">
+                            <label for="stockDNAconcentration" class="label">Concentração Estoque DNA (ng/&mu;L):</label>
+                            <input type="number" id="stockDNAconcentration" value="5.0" min="0.1" step="0.1" oninput="calculateVolumes()" class="text-lg">
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">A concentração do seu estoque de DNA para cálculo do volume.</p>
+                    </div>
+                </div>
+                <div class="bg-yellow-50 p-2 rounded-lg text-sm text-yellow-800">
+                    <p>Volume de DNA (V<sub>DNA</sub>) Requerido: <span id="dnaVolRxnCalculated" class="font-bold">2.00 µL</span></p>
+                </div>
+
+            </div>
+
+            <!-- Seção de Resultados (Será capturada no PNG e impressa no PDF) -->
+            <div id="results" class="result-box">
+                <!-- Metadados Exibidos -->
+                <div id="metadataDisplay" class="mb-4 p-2 bg-emerald-100 rounded-lg text-xs text-gray-700">
+                    <p class="font-semibold text-emerald-800">Experimento: <span id="expNameOut"></span></p>
+                    <p>Responsável: <span id="respNameOut"></span> | Data: <span id="dateOut"></span></p>
+                </div>
+
+                <h2 class="result-header">Resultados Finais do Master Mix</h2>
+
+                <table class="w-full text-sm text-gray-700">
+                    <thead>
+                        <tr class="border-b border-emerald-300 text-left text-gray-600">
+                            <th class="py-2">Componente</th>
+                            <th class="py-2">Vol. por Reação (&mu;L)</th>
+                            <th class="py-2 font-bold text-green-800">Vol. Total Requerido (&mu;L)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="masterMixRow">
+                            <td class="py-1 font-semibold">Master Mix (2X)</td>
+                            <td id="mmVolRxn"></td>
+                            <td id="mmVolTotal" class="font-bold info-cell">
+                                <span id="mmVolTotalValue"></span>
+                                <button onclick="showCalculationDetails('MM')" class="info-button absolute top-1/2 right-0 transform -translate-y-1/2 p-0.5 text-emerald-600 hover:text-emerald-800 transition duration-150" title="Ver Cálculo">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr id="assayRow">
+                            <td class="py-1 font-semibold">TaqMan Assay (<span id="assayConcDisplay"></span>X)</td>
+                            <td id="assayVolRxn"></td>
+                            <td id="assayVolTotal" class="font-bold info-cell">
+                                <span id="assayVolTotalValue"></span>
+                                <button onclick="showCalculationDetails('Assay')" class="info-button absolute top-1/2 right-0 transform -translate-y-1/2 p-0.5 text-emerald-600 hover:text-emerald-800 transition duration-150" title="Ver Cálculo">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr id="waterRow" class="border-b border-emerald-300">
+                            <td class="py-1 font-semibold">Água Estéril</td>
+                            <td id="waterVolRxn"></td>
+                            <td id="waterVolTotal" class="font-bold info-cell">
+                                <span id="waterVolTotalValue"></span>
+                                <button onclick="showCalculationDetails('Water')" class="info-button absolute top-1/2 right-0 transform -translate-y-1/2 p-0.5 text-emerald-600 hover:text-emerald-800 transition duration-150" title="Ver Cálculo">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="bg-emerald-100 font-bold">
+                            <td class="py-2">Volume do Mix (V<sub>Mix</sub>/poço)</td>
+                            <td id="mixVolRxn"></td>
+                            <td id="mixVolTotal" class="text-green-800"></td>
+                        </tr>
+                        <tr>
+                            <td class="py-2">Volume de DNA (V<sub>DNA</sub>/poço)</td>
+                            <td id="dnaVolRxn" colspan="2"></td>
+                        </tr>
+                        <tr class="bg-gray-100">
+                            <td class="py-2 font-bold">Volume Total da Reação (V<sub>T</sub>/poço)</td>
+                            <td id="totalRxnVolCheck" colspan="2"></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div id="error-message" class="mt-4 text-sm font-semibold text-red-600 hidden"></div>
+                
+                <!-- SEÇÃO DE MAPEAMENTO DE POÇOS INCLUÍDA NO DOWNLOAD PNG/PDF -->
+                <div id="wellMappingSection" class="mt-8 pt-4 border-t border-emerald-300 hidden">
+                    <h3 class="font-bold text-lg text-gray-800 mb-2">Mapeamento de Poços Nomeados (Visual)</h3>
+                    
+                    <div id="wellPlateVisual" class="text-sm text-gray-700">
+                        <!-- O grid visual 8x12 será injetado aqui -->
+                    </div>
+                </div>
+                <!-- FIM DA SEÇÃO PARA CAPTURA -->
+
+            </div>
+
+            <!-- Botões de Download -->
+            <div class="mt-6 pt-4 border-t border-emerald-300 download-buttons space-y-3">
+                <button id="downloadPngButton" onclick="downloadResultsAsPNG()" 
+                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg 
+                                transition duration-150 ease-in-out shadow-lg transform hover:scale-[1.01]"
+                        data-original-text="Baixar Resultados (PNG)">
+                    Baixar Resultados (PNG)
+                </button>
+                <button id="downloadPdfButton" onclick="downloadResultsAsPDF()" 
+                        class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg 
+                                transition duration-150 ease-in-out shadow-lg transform hover:scale-[1.01]"
+                        data-original-text="Baixar Resultados (PDF)">
+                    Baixar Resultados (PDF)
+                </button>
+            </div>
+
+        </div>
+    </div>
+    
+    <!-- MODAIS (FORA DO CONTEÚDO PRINCIPAL PARA EVITAR CAPTURA NO PNG/PDF) -->
+    <div id="calculationModal" class="modal" onclick="this.classList.remove('active');">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 id="modalTitle" class="text-xl font-bold text-gray-800 border-b pb-2 mb-4">Detalhes do Cálculo</h3>
+            <div id="modalContent" class="text-sm text-gray-700">
+                <!-- Conteúdo do cálculo injetado aqui -->
+            </div>
+            <button onclick="document.getElementById('calculationModal').classList.remove('active');"
+                    class="mt-6 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg">
+                Fechar
+            </button>
+        </div>
+    </div>
+    
+    <div id="wellNamingModal" class="modal" onclick="this.classList.remove('active');">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-2 mb-4">Nomear Poços da Placa 96</h3>
+            <p class="text-sm text-gray-600 mb-4">Digite o nome (ID) da amostra ou controle em cada poço que será utilizado. Poços vazios serão exibidos com o ID do poço.</p>
+            
+            <div id="wellGridContainer" class="grid gap-1 overflow-x-auto p-2 border rounded-lg bg-gray-50 max-h-96">
+                <!-- O grid 8x12 será injetado aqui pelo JavaScript -->
+            </div>
+
+            <div class="mt-6 flex space-x-3">
+                <button onclick="clearWellNames()"
+                        class="w-1/3 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 rounded-lg transition duration-150 ease-in-out shadow-sm">
+                    Limpar Mapeamento
+                </button>
+                <button onclick="document.getElementById('wellNamingModal').classList.remove('active');"
+                        class="w-2/3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg transition duration-150 ease-in-out shadow-lg">
+                    Salvar Nomes e Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="pedagogicalModal" class="modal" onclick="this.classList.remove('active');">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-2 mb-4">Master Mix (MM) - O que é?</h3>
+            <div class="text-sm text-gray-700 space-y-3">
+                <p>O **Master Mix (MM)** é uma mistura pré-preparada que contém a maioria dos reagentes necessários para a reação de qPCR (excluindo a amostra de DNA). Isso inclui o *Master Mix* comercial (que contém Taq polimerase, dNTPs, tampão), o *TaqMan Assay* (sondas e primers) e a *Água Estéril*.</p>
+                <p>O preparo do MM garante uniformidade e minimiza erros de pipetagem, pois o mesmo volume do mix é adicionado a cada poço.</p>
+                <p class="font-semibold">Cálculo de Segurança:</p>
+                <p>A "Margem de Segurança" (geralmente 10%) é crucial. Ela garante que haja volume suficiente de Master Mix para preencher todos os poços, compensando perdas por gotejamento na ponta, evaporação ou resíduo no tubo.</p>
+            </div>
+            <button onclick="document.getElementById('pedagogicalModal').classList.remove('active');"
+                    class="mt-6 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg">
+                Entendi!
+            </button>
+        </div>
+    </div>
+
+    <!-- RODAPÉ PROFISSIONAL (Fixado no Fundo) - AGORA CLARO E AJUSTADO -->
+    <footer class="footer-light w-full mt-8 p-6 md:p-8 rounded-t-2xl shadow-inner">
+        <div class="max-w-5xl mx-auto text-center">
+            
+            <!-- Logo UNIPEX - Posicionamento de destaque -->
+            <div class="mb-5">
+                <a href="https://www.fmb.unesp.br/Home/Pesquisa/unidadedepesquisaexperimental/unipex-1.png" target="_blank" rel="noopener noreferrer" class="inline-block transition transform hover:scale-105">
+                    <img 
+                        src="https://www.fmb.unesp.br/Home/Pesquisa/unidadedepesquisaexperimental/unipex-1.png" 
+                        alt="Logo UNIPEX - Unidade de Pesquisa Experimental" 
+                        class="h-16 md:h-20 w-auto mx-auto logo-shadow bg-white p-2 rounded-lg"
+                        onerror="this.onerror=null; this.src='https://placehold.co/150x50/f3f4f6/1f2937?text=UNIPEX';"
+                    >
+                </a>
+                <p class="text-xs text-gray-400 mt-2">Unidade de Pesquisa Experimental (UNIPEX)</p>
+            </div>
+
+            <!-- Informações Profissionais - Centralizadas e Claras -->
+            <div class="border-t border-gray-700 pt-5 space-y-1">
+                <p class="text-sm font-light text-gray-400">Desenvolvido por:</p>
+                
+                <h2 class="text-xl md:text-2xl font-semibold text-teal-400">Juan Carlos Ramos de Oliveira</h2>
+                
+                <!-- Email (Texto Simples) -->
+                <p class="text-base text-gray-200">
+                    <span class="font-semibold">Email para contato:</span> juan.oliveira@unesp.br
+                </p>
+
+                <!-- Formação (Separada e em outra linha) -->
+                <p class="text-sm text-gray-200 pt-1">
+                    © 2025 - Calculadora de qPCR 1.0 | Desenvolvido para uso laboratorial.
+                </p>
+                
+            </div>
+
+        </div>
+    </footer>
+
+    <!-- SCRIPTS DE LÓGICA -->
+    <script>
+        // Variável global para armazenar os passos do cálculo
+        window.calculationSteps = {};
+        // Variável global para armazenar os nomes dos poços (Well Naming)
+        let wellNames = {}; 
+        const ROWS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        const COLS = 12;
+
+        // Função para inicializar o objeto wellNames com todos os 96 poços
+        function initWellNames() {
+            for (const row of ROWS) {
+                for (let col = 1; col <= COLS; col++) {
+                    const wellId = `${row}${col}`;
+                    // Inicializa com string vazia
+                    wellNames[wellId] = ''; 
+                }
+            }
+        }
+
+        // Função para garantir que os números tenham 2 casas decimais, ou 3 se for muito pequeno
+        function formatVolume(volume) {
+            if (volume === 0) return '0.00';
+            if (volume < 0.1) return volume.toFixed(3);
+            return volume.toFixed(2);
+        }
+        
+        // --- Função para gerenciar o estado de carregamento dos botões ---
+        function setLoadingState(buttonId, isLoading) {
+            const button = document.getElementById(buttonId);
+            if (!button) return;
+
+            if (isLoading) {
+                // Guarda o texto original e desabilita
+                const originalText = button.getAttribute('data-original-text');
+                button.setAttribute('disabled', 'true');
+                // Adiciona o spinner (usando classes Tailwind: animate-spin)
+                button.innerHTML = `
+                    <span class="flex items-center justify-center">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Gerando...
+                    </span>
+                `;
+            } else {
+                // Restaura o texto original e reabilita
+                const originalText = button.getAttribute('data-original-text');
+                button.removeAttribute('disabled');
+                button.innerHTML = originalText;
+            }
+        }
+        // --- FIM DA NOVA FUNÇÃO ---
+
+
+        // --- Funções do Modal de Mapeamento de Poços ---
+        
+        function saveWellName(wellId, value) {
+            wellNames[wellId] = value;
+            // Atualiza a visualização imediatamente para refletir as mudanças no resultado
+            updateWellMappingDisplay(); 
+        }
+
+        // NOVO: Função para limpar todos os nomes de poços
+        function clearWellNames() {
+            // 1. Resetar o objeto wellNames para strings vazias
+            for (const row of ROWS) {
+                for (let col = 1; col <= COLS; col++) {
+                    const wellId = `${row}${col}`;
+                    wellNames[wellId] = ''; 
+                }
+            }
+            
+            // 2. Regenerar o grid no modal para limpar os inputs visuais
+            generateWellGrid();
+            
+            // 3. Atualizar a exibição visual na seção de resultados
+            updateWellMappingDisplay();
+
+            // Mensagem de feedback (opcional, apenas console)
+            console.log("Mapeamento de poços limpo.");
+        }
+        
+        function generateWellGrid() {
+            const gridContainer = document.getElementById('wellGridContainer');
+            if (!gridContainer) return;
+
+            gridContainer.innerHTML = '';
+            
+            // Definição da estrutura CSS Grid (1 coluna de rótulo + 12 colunas de inputs)
+            gridContainer.style.gridTemplateColumns = `20px repeat(${COLS}, 1fr)`; 
+            
+            // 1. Rótulos das Colunas (1 a 12)
+            let headerRow = '<div class="h-6"></div>'; // Espaço vazio para alinhar com a linha A
+            for (let i = 1; i <= COLS; i++) {
+                headerRow += `<div class="text-center font-bold text-gray-600 text-xs h-6 flex items-center justify-center">${i}</div>`;
+            }
+            gridContainer.innerHTML += headerRow;
+
+            // 2. Linhas (A a H) e Inputs
+            ROWS.forEach(row => {
+                // Rótulo da Linha (A-H)
+                let rowHtml = `<div class="text-left font-bold text-gray-600 text-xs flex items-center justify-center h-6">${row}</div>`;
+                
+                for (let col = 1; col <= COLS; col++) {
+                    const wellId = `${row}${col}`;
+                    const wellName = wellNames[wellId] || '';
+
+                    // Poço (célula de input)
+                    rowHtml += `
+                        <input 
+                            type="text" 
+                            id="input-${wellId}"
+                            data-well-id="${wellId}"
+                            value="${wellName}"
+                            placeholder="${wellId}"
+                            oninput="saveWellName('${wellId}', this.value)"
+                            class="p-0.5 text-xs text-center border rounded-sm focus:ring-1 focus:ring-blue-500 hover:border-blue-300 transition duration-100 h-6"
+                            title="Nome do Poço ${wellId}"
+                        >`;
+                }
+                gridContainer.innerHTML += rowHtml;
+            });
+        }
+
+        function showWellNamingModal() {
+            generateWellGrid();
+            document.getElementById('wellNamingModal').classList.add('active');
+        }
+        
+        // Função para atualizar a representação visual da placa nos resultados
+        function updateWellMappingDisplay() {
+            const displayDiv = document.getElementById('wellPlateVisual');
+            const mappingSection = document.getElementById('wellMappingSection');
+
+            if (!displayDiv || !mappingSection) return; 
+
+            // Filtra apenas os poços que foram nomeados
+            const namedWells = Object.entries(wellNames).filter(([, name]) => name.trim() !== '');
+
+            // N precisa ser calculado primeiro para saber se a seção deve ser visível 
+            // Vamos usar o número de poços preenchidos para decidir se a seção aparece, 
+            // mas o número total de poços (N) é o que importa para o cálculo.
+
+            if (namedWells.length === 0) {
+                displayDiv.innerHTML = '<p class="text-gray-500 text-center p-4 border border-gray-200 rounded-lg">Nenhum poço nomeado. O mapa visual aparecerá aqui após o mapeamento.</p>';
+                mappingSection.classList.add('hidden');
+                return;
+            }
+            
+            mappingSection.classList.remove('hidden');
+
+            let plateHtml = '<div class="flex flex-col items-center justify-center p-2">';
+            plateHtml += '<div class="well-plate-grid">'; 
+            
+            // 1. Header Row (Columns 1-12)
+            plateHtml += '<div class="well-plate-header-cell"></div>'; // Top-left corner empty
+            for (let c = 1; c <= COLS; c++) {
+                plateHtml += `<div class="well-plate-header-cell">${c}</div>`;
+            }
+
+            // 2. Rows (A-H) and Wells
+            ROWS.forEach(row => {
+                // Row Label
+                plateHtml += `<div class="well-plate-row-label">${row}</div>`;
+                
+                for (let c = 1; c <= COLS; c++) {
+                    const wellId = `${row}${c}`;
+                    const name = wellNames[wellId] || '';
+                    // Exibe o nome da amostra se houver, caso contrário, exibe o ID do poço (para fins visuais)
+                    const content = name || wellId; 
+                    const isNamed = name.trim() !== '';
+                    
+                    const cellClass = isNamed ? 'well-cell-named' : 'well-cell-empty';
+                    
+                    // O title exibe o nome completo ao passar o mouse, útil se o texto for truncado (ellipsis)
+                    plateHtml += `<div class="${cellClass}" title="${name || 'Poço Vazio: ' + wellId}">${content}</div>`;
+                }
+            });
+
+            plateHtml += '</div>'; // End of well-plate-grid
+            plateHtml += '</div>'; // End of outer container
+            displayDiv.innerHTML = plateHtml;
+        }
+
+        // --- Funções do Modal de Explicação/Cálculo ---
+        
+        function showPedagogicalExplanation() {
+            document.getElementById('pedagogicalModal').classList.add('active');
+        }
+
+        function showCalculationDetails(component) {
+            const modal = document.getElementById('calculationModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalContent = document.getElementById('modalContent');
+            const stepsData = window.calculationSteps[component];
+
+            if (!stepsData) return;
+
+            // Define o título e o conteúdo
+            modalTitle.textContent = stepsData.title;
+            
+            let htmlContent = '';
+
+            // Adiciona primeiro o cálculo de N_safety (comum a todos)
+            if (window.calculationSteps.N_safety) {
+                 htmlContent += '<div class="font-semibold text-emerald-700">Fator de Segurança (N_safety)</div>';
+                 htmlContent += '<ul class="list-disc ml-4 mb-3 space-y-1">';
+                 window.calculationSteps.N_safety.steps.forEach(step => {
+                     htmlContent += `<li>${step}</li>`;
+                 });
+                 htmlContent += '</ul>';
+            }
+            
+            // Adiciona o cálculo específico do componente
+            htmlContent += `<div class="font-semibold text-emerald-700">${stepsData.title.replace(' - Cálculo Total', '')}</div>`;
+            htmlContent += '<ul class="list-disc ml-4 space-y-1">';
+            stepsData.steps.forEach(step => {
+                htmlContent += `<li>${step}</li>`;
+            });
+            htmlContent += '</ul>';
+
+            modalContent.innerHTML = htmlContent;
+            
+            modal.classList.add('active');
+        }
+
+        // Função para baixar os resultados como imagem PNG
+        function downloadResultsAsPNG() {
+            const resultsElement = document.getElementById('results');
+            const buttonId = 'downloadPngButton';
+            
+            setLoadingState(buttonId, true); // INICIA O LOADING
+
+            // 1. Ocultar apenas os botões de informação (que estão DENTRO da área de captura)
+            const infoButtons = resultsElement.querySelectorAll('.info-button');
+            infoButtons.forEach(btn => btn.style.visibility = 'hidden');
+            
+            // Certifique-se de que os modais estão fechados
+            document.getElementById('calculationModal').classList.remove('active'); 
+            document.getElementById('pedagogicalModal').classList.remove('active'); 
+            document.getElementById('wellNamingModal').classList.remove('active'); 
+
+            // Usa html2canvas para capturar a div de resultados
+            html2canvas(resultsElement, { 
+                scale: 2, // Aumenta a escala para melhor resolução
+                backgroundColor: '#ecfdf5' // Cor de fundo da caixa de resultados
+            }).then(canvas => {
+                // 2. Restaurar a visibilidade dos botões de informação
+                infoButtons.forEach(btn => btn.style.visibility = 'visible');
+
+                // Converte o canvas para URL de dados PNG
+                const image = canvas.toDataURL('image/png');
+
+                // Cria um elemento link temporário para o download
+                const a = document.createElement('a');
+                a.href = image;
+                a.download = 'qPCR_Preparacao_Mix_e_Mapeamento.png';
+                
+                // Dispara o download
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                setLoadingState(buttonId, false); // FIM DO LOADING
+            }).catch(error => {
+                console.error("Erro ao gerar PNG:", error);
+                setLoadingState(buttonId, false); // FIM DO LOADING EM CASO DE ERRO
+            });
+        }
+        
+        // Função para o download em PDF usando html2canvas + jsPDF
+        function downloadResultsAsPDF() {
+            const resultsElement = document.getElementById('results');
+            const buttonId = 'downloadPdfButton';
+
+            setLoadingState(buttonId, true); // INICIA O LOADING
+
+            // 1. Ocultar apenas os botões de informação (que estão DENTRO da área de captura)
+            const infoButtons = resultsElement.querySelectorAll('.info-button');
+            infoButtons.forEach(btn => btn.style.visibility = 'hidden');
+
+            // Certifique-se de que os modais estão fechados
+            document.getElementById('calculationModal').classList.remove('active'); 
+            document.getElementById('pedagogicalModal').classList.remove('active'); 
+            document.getElementById('wellNamingModal').classList.remove('active'); 
+
+            // 2. Converter HTML para Canvas
+            html2canvas(resultsElement, { 
+                scale: 2, // Alta resolução
+                backgroundColor: '#ecfdf5' 
+            }).then(canvas => {
+                // 3. Restaurar a visibilidade dos botões de informação
+                infoButtons.forEach(btn => btn.style.visibility = 'visible');
+
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+
+                // 4. Inicializar jsPDF
+                const pdf = new jsPDF('p', 'mm', 'a4'); 
+
+                // 5. Calcular dimensões
+                const imgProps = pdf.getImageProperties(imgData);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+                // 6. Adicionar a imagem ao PDF
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+                // 7. Salvar/Baixar o PDF
+                pdf.save('qPCR_Preparacao_Mix_e_Mapeamento.pdf');
+                
+                setLoadingState(buttonId, false); // FIM DO LOADING
+            }).catch(error => {
+                console.error("Erro ao gerar PDF:", error);
+                setLoadingState(buttonId, false); // FIM DO LOADING EM CASO DE ERRO
+            });
+        }
+
+        // Inicializa a data no campo de input
+        function initializeDate() {
+            const dateInput = document.getElementById('date');
+            if (!dateInput.value) {
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0'); // Mês começa em 0
+                const dd = String(today.getDate()).padStart(2, '0');
+                dateInput.value = `${yyyy}-${mm}-${dd}`;
+            }
+        }
+
+
+        // Função principal de cálculo
+        function calculateVolumes() {
+            // 0. Coleta de Metadados
+            const expName = document.getElementById('experimentName').value;
+            const respName = document.getElementById('responsiblePerson').value;
+            const dateValue = document.getElementById('date').value;
+            
+            // Formatando a data para exibição
+            let formattedDate = dateValue;
+            try {
+                // Tenta formatar para dd/mm/aaaa se for um formato ISO (yyyy-mm-dd)
+                const dateParts = dateValue.split('-');
+                if (dateParts.length === 3) {
+                    formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                }
+            } catch (e) {
+                // Se falhar, usa o valor original
+                console.error("Erro ao formatar data:", e);
+            }
+
+            // 1. Coleta de Entradas e Cálculo de N (Total de Poços)
+            const n_samples = parseFloat(document.getElementById('numSamples').value) || 0;
+            const n_replicates = parseFloat(document.getElementById('numReplicates').value) || 1;
+            const n_controls = parseFloat(document.getElementById('numControls').value) || 0;
+            
+            const N = (n_samples * n_replicates) + n_controls;
+
+            document.getElementById('numWellsDisplay').textContent = N;
+
+            const Vt = parseFloat(document.getElementById('totalRxnVolume').value);
+            const C = parseFloat(document.getElementById('assayConcentration').value);
+            const M = parseFloat(document.getElementById('margin').value) / 100;
+            
+            // Inputs para cálculo de DNA
+            const M_target = parseFloat(document.getElementById('targetDNAmass').value); // Massa Alvo (ng)
+            const C_stock = parseFloat(document.getElementById('stockDNAconcentration').value); // Concentração Estoque (ng/µL)
+            
+            const resultsDiv = document.getElementById('results');
+            const errorDiv = document.getElementById('error-message');
+
+            // 2. Validação básica de entradas
+            if (isNaN(N) || N <= 0 || isNaN(Vt) || Vt <= 0 || isNaN(M) || M < 0 || isNaN(C) || isNaN(M_target) || M_target <= 0 || isNaN(C_stock) || C_stock <= 0) {
+                // Se houver erro, apenas esconde a div de resultados e mostra a de erro (se o erro for real)
+                resultsDiv.classList.add('hidden');
+                // Mas, como este IF cobre apenas a falta de input, não vamos mostrar erro, apenas esconder
+                errorDiv.classList.add('hidden');
+                updateWellMappingDisplay();
+                return;
+            }
+
+            // 3. Cálculo do Volume de DNA Requerido (Vdna)
+            const Vdna = M_target / C_stock;
+
+            document.getElementById('dnaVolRxnCalculated').textContent = formatVolume(Vdna) + ' µL';
+            
+            // 4. Verificação de volume
+            const Vmm = Vt / 2;
+            const Vassay = Vt / C;
+            
+            const Vfixed = Vmm + Vassay + Vdna;
+
+            if (Vfixed > Vt) {
+                resultsDiv.classList.add('hidden');
+                errorDiv.textContent = `ERRO: O volume total dos componentes fixos (Master Mix, Assay e DNA) é de ${formatVolume(Vfixed)} µL, o que excede o Volume Total da Reação (${formatVolume(Vt)} µL). Sugestões: Aumente VT, diminua a Massa Alvo de DNA, ou use DNA mais concentrado.`;
+                errorDiv.classList.remove('hidden');
+                updateWellMappingDisplay();
+                return;
+            }
+
+            // Se a validação passou, oculte a mensagem de erro
+            errorDiv.classList.add('hidden');
+
+            // 5. Cálculo do volume de Água Estéril
+            const Vh2o = Vt - Vfixed;
+            
+            // 6. Volume do Mix por poço
+            const Vmix = Vmm + Vassay + Vh2o;
+            
+            // 7. Cálculo do fator de segurança (N total + N * Margem)
+            const N_safety = N * (1 + M);
+
+            // 8. Cálculo dos volumes totais (Total V = Vol_por_Rxn * N_safety)
+            const MM_Total = Vmm * N_safety;
+            const Assay_Total = Vassay * N_safety;
+            const H2O_Total = Vh2o * N_safety;
+            const Mix_Total = Vmix * N_safety;
+
+            // 9. Armazenamento dos passos do cálculo para o popup (window.calculationSteps)
+            const Vfixed_formatted = formatVolume(Vfixed);
+            const Vt_formatted = formatVolume(Vt);
+            const M_percent = (M * 100).toFixed(0);
+            const N_safety_formatted = N_safety.toFixed(2);
+            const Vmm_formatted = formatVolume(Vmm);
+            const Vassay_formatted = formatVolume(Vassay);
+            const Vh2o_formatted = formatVolume(Vh2o);
+
+            window.calculationSteps = {
+                N_safety: {
+                    steps: [
+                        `Total de Poços (N): (${n_samples} amostras x ${n_replicates} replicatas) + ${n_controls} controles = ${N}`,
+                        `Fator de Segurança (M): 1 + (${M_percent}%) / 100 = ${formatVolume(1 + M)}`,
+                        `Nº de Reações Seguras (N_safety): ${N} x ${formatVolume(1 + M)} = ${N_safety_formatted}`,
+                    ]
+                },
+                MM: {
+                    title: "Master Mix (MM) - Cálculo Total",
+                    steps: [
+                        `Volume de MM por poço (V_MM): V_Total / 2 = ${Vt_formatted} µL / 2 = ${Vmm_formatted} µL`,
+                        `Volume Total Requerido: V_MM por poço x N_safety = ${Vmm_formatted} µL x ${N_safety_formatted} = ${formatVolume(MM_Total)} µL`,
+                    ]
+                },
+                Assay: {
+                    title: "TaqMan Assay - Cálculo Total",
+                    steps: [
+                        `Volume de Assay por poço (V_Assay): V_Total / Concentração = ${Vt_formatted} µL / ${C} = ${Vassay_formatted} µL`,
+                        `Volume Total Requerido: V_Assay por poço x N_safety = ${Vassay_formatted} µL x ${N_safety_formatted} = ${formatVolume(Assay_Total)} µL`,
+                    ]
+                },
+                Water: {
+                    title: "Água Estéril - Cálculo Total",
+                    steps: [
+                        `Volume dos Fixos (V_fixos): V_MM + V_Assay + V_DNA = ${Vmm_formatted} + ${Vassay_formatted} + ${formatVolume(Vdna)} = ${Vfixed_formatted} µL`,
+                        `Volume de Água por poço (V_H2O): V_Total - V_fixos = ${Vt_formatted} µL - ${Vfixed_formatted} µL = ${Vh2o_formatted} µL`,
+                        `Volume Total Requerido: V_H2O por poço x N_safety = ${Vh2o_formatted} µL x ${N_safety_formatted} = ${formatVolume(H2O_Total)} µL`,
+                    ]
+                }
+            };
+
+
+            // 10. Atualização da Interface
+            
+            // Exibir Metadados 
+            document.getElementById('expNameOut').textContent = expName || 'N/A';
+            document.getElementById('respNameOut').textContent = respName || 'N/A';
+            document.getElementById('dateOut').textContent = formattedDate || 'N/A';
+            
+            // Volumes por Reação
+            document.getElementById('mmVolRxn').textContent = formatVolume(Vmm);
+            document.getElementById('assayVolRxn').textContent = formatVolume(Vassay);
+            document.getElementById('waterVolRxn').textContent = formatVolume(Vh2o);
+            document.getElementById('dnaVolRxn').textContent = formatVolume(Vdna) + ' µL (Pipetar amostra individualmente)';
+            document.getElementById('mixVolRxn').textContent = formatVolume(Vmix);
+            document.getElementById('totalRxnVolCheck').textContent = formatVolume(Vt);
+
+
+            // Volumes Totais (com margem) - Atualiza os spans para separar do botão
+            document.getElementById('mmVolTotalValue').textContent = formatVolume(MM_Total) + ' µL';
+            document.getElementById('assayVolTotalValue').textContent = formatVolume(Assay_Total) + ' µL';
+            document.getElementById('waterVolTotalValue').textContent = formatVolume(H2O_Total) + ' µL';
+            document.getElementById('mixVolTotal').textContent = formatVolume(Mix_Total) + ' µL';
+            
+            // Exibir Concentração do Assay
+            document.getElementById('assayConcDisplay').textContent = C;
+
+            resultsDiv.classList.remove('hidden');
+            
+            // ATUALIZA O MAPEAMENTO VISUAL DE POÇOS
+            updateWellMappingDisplay();
+        }
+
+        // Inicia o cálculo e a inicialização de nomes ao carregar a página
+        window.onload = function() {
+            initWellNames();
+            initializeDate(); // Inicializa a data
+            calculateVolumes();
+            // Adiciona listeners para recalcular ao alterar qualquer input
+            document.querySelectorAll('input, select').forEach(element => {
+                element.addEventListener('input', calculateVolumes);
+                element.addEventListener('change', calculateVolumes); // Para o <select>
+            });
+        }
+
+    </script>
+</body>
+</html>
